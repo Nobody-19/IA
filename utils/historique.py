@@ -108,3 +108,43 @@ def generer_titre(premier_message: str) -> str:
     titre = premier_message.strip().replace("\n", " ")
     return (titre[:57] + "...") if len(titre) > 60 else titre or "Conversation"
 
+
+# ──────────────────────────────────────────
+# EXPORT / IMPORT JSON (pour Streamlit Cloud)
+# ──────────────────────────────────────────
+def exporter_json() -> str:
+    """Exporte tout l'historique en JSON — pour telechargement."""
+    import json
+    conversations = lister_conversations(limite=200)
+    data = []
+    for conv in conversations:
+        msgs = charger_messages(conv["id"])
+        data.append({
+            "titre":         conv["titre"],
+            "date_creation": conv["date_creation"],
+            "date_maj":      conv["date_maj"],
+            "messages":      msgs,
+        })
+    return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def importer_json(json_str: str) -> int:
+    """
+    Importe un historique depuis un JSON precedemment exporte.
+    Retourne le nombre de conversations importees.
+    """
+    import json
+    data = json.loads(json_str)
+    count = 0
+    for conv_data in data:
+        conv_id = nouvelle_conversation(conv_data.get("titre", "Importee"))
+        for msg in conv_data.get("messages", []):
+            sauvegarder_message(
+                conv_id,
+                msg["role"],
+                msg["contenu"],
+                msg.get("module", "general"),
+            )
+        count += 1
+    return count
+

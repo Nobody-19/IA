@@ -52,7 +52,7 @@ from docs.database import answer_question as bdd_answer
 from utils.historique import (
     nouvelle_conversation, mettre_a_jour_titre, lister_conversations,
     supprimer_conversation, sauvegarder_message, charger_messages,
-    compter_messages, generer_titre,
+    compter_messages, generer_titre, exporter_json, importer_json,
 )
 from module_veille.veille_agent import recherche_et_synthese as veille_recherche
 from docs.rapport import creer_rapport, detecter_type_rapport
@@ -82,6 +82,21 @@ Regles :
 
 logging.basicConfig(level=logging.WARNING)
 load_dotenv(dotenv_path=ENV_FILE)
+
+def _charger_secrets_cloud() -> None:
+    """
+    Sur Streamlit Cloud, charge les secrets dans os.environ
+    pour que le reste du code fonctionne sans modification.
+    """
+    try:
+        import streamlit as st
+        for key in ("GROQ_API_KEY", "TAVILY_API_KEY"):
+            if key in st.secrets and not os.environ.get(key):
+                os.environ[key] = st.secrets[key]
+    except Exception:
+        pass
+
+_charger_secrets_cloud()
 
 st.set_page_config(
     page_title="Agent IA Entreprise",
@@ -985,6 +1000,35 @@ def main():
         )
 
         conversations = lister_conversations(limite=50)
+
+        # Export / Import JSON
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            if st.button("Exporter l'historique", use_container_width=True):
+                json_data = exporter_json()
+                st.download_button(
+                    "Telecharger JSON",
+                    data=json_data,
+                    file_name="historique_agent.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+        with col_imp:
+            fichier_import = st.file_uploader(
+                "Importer un historique",
+                type=["json"],
+                label_visibility="collapsed",
+                key="import_historique",
+            )
+            if fichier_import:
+                try:
+                    nb = importer_json(fichier_import.read().decode("utf-8"))
+                    st.success(f"{nb} conversation(s) importee(s)")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur import : {e}")
+
+        st.divider()
 
         if not conversations:
             st.info("Aucune conversation enregistree pour l'instant.")

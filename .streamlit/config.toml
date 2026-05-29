@@ -1,0 +1,10 @@
+[server]
+maxUploadSize = 200
+headless = true
+enableCORS = false
+
+[theme]
+base = "dark"
+
+[runner]
+fastReruns = true

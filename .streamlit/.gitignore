@@ -1,0 +1,26 @@
+# Secrets — NE JAMAIS commiter
+.env
+.streamlit/secrets.toml
+module_email/token.json
+module_email/credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Base de donnees historique (donnees personnelles)
+historique.db
+
+# Chroma (regenere au lancement)
+chroma_db/
+
+# Rapports generes
+rapports/
+
+# Fichiers temporaires
+*.tmp
+*.log
