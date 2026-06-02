@@ -36,6 +36,10 @@ from module_email.scheduler import (
     annuler_email_programme,
 )
 from module_email.priorite import analyser_priorites_batch, badge_priorite
+from module_email.oauth_flow import (
+    generer_url_autorisation, echanger_code_contre_token,
+    est_connecte, get_email_connecte, deconnecter,
+)
 from module_email.gmail_reader import (
     lire_emails as gmail_lire,
     envoyer_email as gmail_envoyer,
@@ -790,19 +794,60 @@ def main():
                 st.caption(", ".join(st.session_state["docs_charges_noms"]))
 
         # ── Emails ──
-        with st.expander("Emails", expanded=False):
-            nb = st.slider("Nb emails", 5, 50, MAX_EMAILS, label_visibility="collapsed")
-            if st.button("Actualiser", use_container_width=True):
-                with st.spinner("Recuperation..."):
-                    emails = _charger_emails_disponibles(nb)
-                    if emails:
-                        st.session_state["emails_charges"] = emails
-                        st.session_state["index_emails"]   = indexer_emails(emails)
-                        st.success(f"{len(emails)} email(s)")
-                    else:
-                        st.error("Verifiez Gmail (token.json).")
-            if st.session_state.get("emails_charges"):
-                st.caption(f"{len(st.session_state['emails_charges'])} emails charges")
+        with st.expander("Emails", expanded=not est_connecte()):
+
+            # Gestion callback OAuth2 — recuperer le code dans l'URL
+            params = st.query_params
+            if "code" in params and not est_connecte():
+                try:
+                    with st.spinner("Connexion Gmail en cours..."):
+                        code  = params["code"]
+                        state = params.get("state", "")
+                        token = echanger_code_contre_token(code, state)
+                        st.session_state["gmail_token"] = token
+                        # Recuperer l'email connecte
+                        from module_email.gmail_reader import get_service
+                        svc   = get_service()
+                        profil = svc.users().getProfile(userId="me").execute()
+                        st.session_state["gmail_email"] = profil.get("emailAddress", "")
+                        st.query_params.clear()
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur connexion Gmail : {e}")
+                    st.query_params.clear()
+
+            if est_connecte():
+                email_connecte = get_email_connecte()
+                st.success(f"Connecte : {email_connecte}")
+                nb = st.slider("Nb emails", 5, 50, MAX_EMAILS, label_visibility="collapsed")
+                if st.button("Actualiser", use_container_width=True):
+                    with st.spinner("Recuperation..."):
+                        emails = _charger_emails_disponibles(nb)
+                        if emails:
+                            st.session_state["emails_charges"] = emails
+                            st.session_state["index_emails"]   = indexer_emails(emails)
+                            st.success(f"{len(emails)} email(s)")
+                        else:
+                            st.error("Aucun email recupere.")
+                if st.session_state.get("emails_charges"):
+                    st.caption(f"{len(st.session_state['emails_charges'])} emails charges")
+                if st.button("Deconnecter Gmail", use_container_width=True):
+                    deconnecter()
+                    st.rerun()
+            else:
+                st.caption("Connectez votre compte Gmail")
+                try:
+                    auth_url, state = generer_url_autorisation()
+                    st.session_state["oauth_state"] = state
+                    st.link_button(
+                        "Connecter Gmail",
+                        auth_url,
+                        use_container_width=True,
+                    )
+                except FileNotFoundError:
+                    st.warning("credentials.json manquant dans module_email/")
+                except Exception as e:
+                    st.error(f"Erreur OAuth : {e}")
 
         # ── Rapport ──
         if "dernier_rapport" in st.session_state:
@@ -1099,4 +1144,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

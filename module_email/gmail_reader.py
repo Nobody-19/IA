@@ -82,9 +82,26 @@ def _creds_depuis_fichier() -> Credentials:
 
 
 def get_service():
-    """Retourne le service Gmail — choisit automatiquement local ou cloud."""
-    creds = _creds_depuis_secrets() if _est_sur_cloud() else _creds_depuis_fichier()
-    return build("gmail", "v1", credentials=creds)
+    """
+    Retourne le service Gmail.
+    Priorite : session Streamlit > secrets cloud > fichier local
+    """
+    # 1. Token en session (utilisateur connecte via OAuth dans Streamlit)
+    try:
+        import streamlit as st
+        token_dict = st.session_state.get("gmail_token")
+        if token_dict:
+            from module_email.oauth_flow import get_service_depuis_token
+            return get_service_depuis_token(token_dict)
+    except Exception:
+        pass
+
+    # 2. Secrets Streamlit Cloud
+    if _est_sur_cloud():
+        return build("gmail", "v1", credentials=_creds_depuis_secrets())
+
+    # 3. Fichier local token.json
+    return build("gmail", "v1", credentials=_creds_depuis_fichier())
 
 
 def extraire_corps(payload: dict) -> str:
@@ -163,4 +180,3 @@ def generer_et_envoyer(destinataire: str, sujet: str, instruction: str):
     corps  = response.choices[0].message.content
     msg_id = envoyer_email(destinataire, sujet, corps)
     return corps, msg_id
-
